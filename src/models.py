@@ -69,7 +69,7 @@ class CandidateRecord(BaseModel):
 
     # Fine (M2, placeholder in M1)
     fine_iteration: int = 0
-    fine_checks: dict = Field(default_factory=dict)
+    fine_checks: dict[str, Any] = Field(default_factory=dict)
     fine_passed: bool | None = None
     fine_feedback: str | None = None
     iteration_history: list[IterationStep] = Field(default_factory=list)

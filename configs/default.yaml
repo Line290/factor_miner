@@ -86,6 +86,7 @@ backtest:
     universe: ["csi800"]        # 可扩展为 ["csi800", "csi1000"]
     start_date: "2019-01-01"
     end_date: "auto"
+    min_list_days: 252          # 上市不满一年剔除
   api:
     mode: async                 # sync | async
     endpoint_submit: "http://localhost:8000/backtest"

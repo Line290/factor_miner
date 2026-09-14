@@ -62,7 +62,8 @@ def backtest_node(state: dict, *, cfg: AppConfig, run_dir: Path) -> dict:
 
     merged = merged.dropna()
 
-    # Universe filter: csi800_member=1, not ST, not suspended, list_days>=252
+    # Universe filter: csi800_member=1, not ST, not suspended, list_days>=min_list_days
+    min_list_days = cfg.backtest.local.min_list_days
     for col in ["csi800_member", "is_st", "suspend", "list_days"]:
         if col in market.columns:
             merged = merged.join(market[[col]], how="left")
@@ -73,7 +74,7 @@ def backtest_node(state: dict, *, cfg: AppConfig, run_dir: Path) -> dict:
     if "suspend" in merged.columns:
         merged = merged[merged["suspend"] == 0]
     if "list_days" in merged.columns:
-        merged = merged[merged["list_days"] >= 252]
+        merged = merged[merged["list_days"] >= min_list_days]
 
     # Daily cross-sectional spearman IC
     def _daily_ic(g):

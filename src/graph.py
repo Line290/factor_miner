@@ -3,12 +3,12 @@ from __future__ import annotations
 
 import sqlite3
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import Any
 
 from loguru import logger
 from langgraph.graph import END, StateGraph
 from langgraph.checkpoint.sqlite import SqliteSaver
-from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer  # noqa: F401 (保留类型提示用)
+from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
 from langgraph.types import Send
 
 from .config import AppConfig
@@ -25,16 +25,20 @@ from .nodes.ingest import ingest_node
 from .nodes.iterate import iterate_node
 from .nodes.relevance_check import relevance_check_node
 from .persistence import RunRecorder
-from .state import MinerState
+from .state import MinerState, PerCandidateState
 from .tools.business_rule import BusinessRules
 from .tools.data_schema import DataSchema
 from .tools.factor_library import FactorLibrary
 from .tools.serde_numpy import NumpySafeSerializer
 
 
-# ---------- Subgraph state ----------
-class PerCandidateState(TypedDict, total=False):
-    candidate: dict   # CandidateRecord.model_dump()
+# ---------- Helpers ----------
+def _resolve_run_dir(recorder: RunRecorder | None, candidate_id: str, run_root: str) -> Path:
+    """Get run_dir from recorder, or reconstruct from candidate_id on resume."""
+    if recorder is not None:
+        return recorder.run_dir
+    run_id = candidate_id.rsplit("_c", 1)[0]
+    return Path(run_root) / run_id
 
 
 def build_graph(cfg: AppConfig, llm: LLMClient):
@@ -69,14 +73,7 @@ def build_graph(cfg: AppConfig, llm: LLMClient):
         return generate_factor_node(state, cfg=cfg, llm=llm, data_schema=ds)
 
     def _code_exec(state: dict) -> dict:
-        recorder = holder.get("recorder")
-        if recorder is None:
-            # Resume: reconstruct run_dir from candidate_id
-            cid = state["candidate"]["candidate_id"]
-            run_id = cid.rsplit("_c", 1)[0]
-            run_dir = Path(cfg.persistence.run_root) / run_id
-        else:
-            run_dir = recorder.run_dir
+        run_dir = _resolve_run_dir(holder.get("recorder"), state["candidate"]["candidate_id"], cfg.persistence.run_root)
         return code_exec_node(state, cfg=cfg, run_dir=run_dir)
 
     def _code_fix(state: dict) -> dict:
@@ -87,13 +84,7 @@ def build_graph(cfg: AppConfig, llm: LLMClient):
         return relevance_check_node(state, cfg=cfg)
 
     def _backtest(state: dict) -> dict:
-        recorder = holder.get("recorder")
-        if recorder is None:
-            cid = state["candidate"]["candidate_id"]
-            run_id = cid.rsplit("_c", 1)[0]
-            run_dir = Path(cfg.persistence.run_root) / run_id
-        else:
-            run_dir = recorder.run_dir
+        run_dir = _resolve_run_dir(holder.get("recorder"), state["candidate"]["candidate_id"], cfg.persistence.run_root)
         return backtest_node(state, cfg=cfg, run_dir=run_dir)
 
     def _save(state: dict) -> dict:

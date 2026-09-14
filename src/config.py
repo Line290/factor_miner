@@ -94,6 +94,7 @@ class BacktestLocalConfig(BaseModel):
     universe: list[str] = Field(default_factory=lambda: ["csi800"])
     start_date: str = "2019-01-01"
     end_date: str = "auto"
+    min_list_days: int = 252
 
 
 class BacktestAPIConfig(BaseModel):

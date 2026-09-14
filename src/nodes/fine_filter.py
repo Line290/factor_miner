@@ -110,7 +110,8 @@ def fine_filter_node(
     data_schema: DataSchema,
     business_rules: BusinessRules,
 ) -> dict:
-    c: CandidateRecord = CandidateRecord(**state["candidate"]) if isinstance(state["candidate"], dict) else state["candidate"]
+    raw = state["candidate"]
+    c: CandidateRecord = CandidateRecord(**raw) if isinstance(raw, dict) else raw
     checks: dict = {}
 
     if cfg.fine_filter.novelty_check.enabled:

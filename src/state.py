@@ -28,3 +28,8 @@ class MinerState(TypedDict, total=False):
     errors: Annotated[list[str], add]
     started_at: datetime
     finished_at: datetime
+
+
+class PerCandidateState(TypedDict, total=False):
+    """State for the per-candidate subgraph."""
+    candidate: dict  # CandidateRecord.model_dump()
