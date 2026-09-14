@@ -1,0 +1,210 @@
+# 因子库索引（初版：业界经典开源因子占位）
+# 本文件是"逻辑新颖性检查"的对照基准。
+# 新候选因子会被 LLM 与本文件中所有因子的 name/logic_desc/formula 逐一比较，
+# 若判定"实质等价"则新颖性检查不通过。
+#
+# 后续接入真实本地因子库时，把 values_path 指向实际 parquet 文件即可；
+# values_path 留空表示"仅做逻辑层对比，暂未落因子值矩阵"。
+# ============================================================
+
+factors:
+  # ==================== 价值类 ====================
+  - id: val_bp
+    name: "账面市值比 BP"
+    category: value
+    logic_desc: "净资产/总市值，越低越被低估（注意 BP 与 EP 的差异：BP 用净资产，EP 用盈利）"
+    formula: "1 / pb"
+    pit_note: "净资产用最近一期已披露财报；pb 用 T 日收盘值"
+    values_path: null
+
+  - id: val_ep
+    name: "盈利价格比 EP"
+    category: value
+    logic_desc: "EPS TTM / 收盘价，越高越便宜"
+    formula: "1 / pe_ttm"
+    pit_note: "亏损股 EP 为负或 NaN"
+    values_path: null
+
+  - id: val_sp
+    name: "销售额价格比 SP"
+    category: value
+    logic_desc: "营收 TTM / 总市值"
+    formula: "1 / ps_ttm"
+    pit_note: ""
+    values_path: null
+
+  - id: val_dp
+    name: "股息率 DP"
+    category: value
+    logic_desc: "近 12 月分红 / 总市值"
+    formula: "dv_ttm"
+    pit_note: ""
+    values_path: null
+
+  # ==================== 成长类 ====================
+  - id: gr_rev_yoy
+    name: "营收同比增速"
+    category: growth
+    logic_desc: "本期营收 / 去年同期营收 - 1"
+    formula: "revenue_ttm / revenue_ttm.shift(252) - 1"
+    pit_note: "需按披露日对齐，不能用报告期日"
+    values_path: null
+
+  - id: gr_profit_yoy
+    name: "净利润同比增速"
+    category: growth
+    logic_desc: "本期净利润 / 去年同期净利润 - 1"
+    formula: "net_profit_ttm / net_profit_ttm.shift(252) - 1"
+    pit_note: "同上；亏损股增速无意义，应 NaN"
+    values_path: null
+
+  # ==================== 动量类 ====================
+  - id: mom_20
+    name: "20 日动量"
+    category: momentum
+    logic_desc: "过去 20 个交易日累计收益，短期反转/动量"
+    formula: "close_adj / close_adj.shift(20) - 1"
+    pit_note: "右边界 T 日；信号 T+1 成交"
+    values_path: null
+
+  - id: mom_60
+    name: "60 日动量"
+    category: momentum
+    logic_desc: "过去 60 个交易日累计收益"
+    formula: "close_adj / close_adj.shift(60) - 1"
+    pit_note: ""
+    values_path: null
+
+  - id: mom_12_1
+    name: "12-1 动量（跳过最近 1 个月）"
+    category: momentum
+    logic_desc: "过去 12 个月收益跳过最近 1 个月，剔除短期反转"
+    formula: "close_adj.shift(21) / close_adj.shift(252) - 1"
+    pit_note: "Jegadeesh-Titman 经典构造"
+    values_path: null
+
+  # ==================== 波动类 ====================
+  - id: vol_20
+    name: "20 日波动率"
+    category: volatility
+    logic_desc: "过去 20 日日收益率标准差，低异象"
+    formula: "ret_1d.rolling(20).std()"
+    pit_note: "右边界 T 日"
+    values_path: null
+
+  - id: vol_60
+    name: "60 日波动率"
+    category: volatility
+    logic_desc: "过去 60 日日收益率标准差"
+    formula: "ret_1d.rolling(60).std()"
+    pit_note: ""
+    values_path: null
+
+  - id: downside_vol
+    name: "下行波动率"
+    category: volatility
+    logic_desc: "仅统计负收益样本的波动率"
+    formula: "ret_1d.where(ret_1d<0).rolling(60).std()"
+    pit_note: ""
+    values_path: null
+
+  # ==================== 流动性类 ====================
+  - id: liq_turnover_20
+    name: "20 日平均换手率"
+    category: liquidity
+    logic_desc: "过去 20 日平均换手率，低换手异象"
+    formula: "turnover_1d.rolling(20).mean()"
+    pit_note: ""
+    values_path: null
+
+  - id: liq_amihud
+    name: "Amihud 非流动性"
+    category: liquidity
+    logic_desc: "|ret| / amount 的均值，越大流动性越差"
+    formula: "(ret_1d.abs() / amount).rolling(20).mean()"
+    pit_note: "amount 单位元"
+    values_path: null
+
+  # ==================== 质量类 ====================
+  - id: qual_roe
+    name: "ROE TTM"
+    category: quality
+    logic_desc: "净利润 / 净资产，质量因子核心"
+    formula: "net_profit_ttm / equity"
+    pit_note: "按披露日对齐"
+    values_path: null
+
+  - id: qual_gross_margin
+    name: "毛利率"
+    category: quality
+    logic_desc: "(营收-营业成本)/营收"
+    formula: "(revenue - cogs) / revenue"
+    pit_note: "按披露日对齐"
+    values_path: null
+
+  - id: qual_accrual
+    name: "应计项（Sloan）"
+    category: quality
+    logic_desc: "(净利润 - 经营现金流)/总资产，越高未来收益越低"
+    formula: "(net_profit - ocf) / total_assets"
+    pit_note: "按披露日对齐"
+    values_path: null
+
+  # ==================== 情绪类 ====================
+  - id: sent_north_ratio
+    name: "北向持股占比变化"
+    category: sentiment
+    logic_desc: "北向持股占流通股比例的 20 日变化"
+    formula: "north_bound_holding_ratio - north_bound_holding_ratio.shift(20)"
+    pit_note: "北向数据 T+1 可得"
+    values_path: null
+
+  - id: sent_north_net
+    name: "北向净流入"
+    category: sentiment
+    logic_desc: "北向持股数量 20 日累计变化"
+    formula: "north_bound_holding.diff(20)"
+    pit_note: ""
+    values_path: null
+
+  # ==================== 规模类 ====================
+  - id: size_log_mv
+    name: "对数总市值"
+    category: size
+    logic_desc: "log(总市值)，小市值异象"
+    formula: "log(total_mv)"
+    pit_note: "T 日收盘后市值"
+    values_path: null
+
+  - id: size_circ_mv
+    name: "流通市值"
+    category: size
+    logic_desc: "流通股市值"
+    formula: "circ_mv"
+    pit_note: ""
+    values_path: null
+
+  # ==================== 技术/量价类 ====================
+  - id: tech_reversal_5
+    name: "5 日反转"
+    category: technical
+    logic_desc: "过去 5 日收益取负，短期反转"
+    formula: "- (close_adj / close_adj.shift(5) - 1)"
+    pit_note: ""
+    values_path: null
+
+  - id: tech_rsi_14
+    name: "14 日 RSI"
+    category: technical
+    logic_desc: "相对强弱指标，超买超卖"
+    formula: "14 日平均上涨幅度 / (平均上涨+平均下跌)"
+    pit_note: ""
+    values_path: null
+
+  - id: tech_ma_bias
+    name: "均线偏离度"
+    category: technical
+    logic_desc: "收盘价相对 20 日均线的偏离"
+    formula: "close_adj / close_adj.rolling(20).mean() - 1"
+    pit_note: ""
+    values_path: null

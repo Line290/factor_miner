@@ -1,0 +1,108 @@
+# ============================================================
+# 单因子挖掘智能体 · 全局默认配置
+# 所有阈值/模型/路径/开关集中在此，代码不硬编码。
+# 运行时可通过 CLI --config 覆盖。
+# ============================================================
+
+# ---------- LLM ----------
+llm:
+  provider: openai_compatible
+  base_url: "https://llm-3v0j331e5ba5u7dv.cn-beijing.maas.aliyuncs.com/compatible-mode/v1"
+  api_key_env: "DASHSCOPE_API_KEY"          # 从环境变量读，不写死
+  model: "qwen3.7-flash-2026-07-15"
+  temperature: 0.2
+  timeout_sec: 120
+  max_retries: 3
+  # 代码生成/修复节点可用更强模型（可选覆盖）
+  overrides:
+    generate_factor:
+      model: "deepseek-v4-flash-0731"
+    code_fix:
+      model: "deepseek-v4-flash-0731"
+
+# ---------- 输入材料 ----------
+material:
+  type: auto            # auto | pdf | json   (auto 按扩展名)
+  # 一次跑一篇：CLI 传入文件路径即可
+
+# ---------- 候选抽取 ----------
+extraction:
+  max_candidates_per_doc: 15
+  min_candidates_per_doc: 1
+  require_fields: [motivation, logic_desc, formula_draft]
+
+# ---------- 粗筛 ----------
+coarse_judge:
+  dimensions:
+    - key: novelty
+      name: "新颖性"
+      desc: "该因子逻辑在当前材料内部及已有认知中是否新颖，1-5 分"
+    - key: feasibility
+      name: "可落地性"
+      desc: "逻辑是否清晰、公式是否可计算，1-5 分"
+    - key: logic_clarity
+      name: "逻辑清晰度"
+      desc: "动机与公式之间的因果链是否自洽，1-5 分"
+  pass_threshold: 3.0           # 首轮跑完后校准
+  min_dim_score: 2.0
+  fail_action: "mark_and_archive"
+
+# ---------- 细筛 ----------
+fine_filter:
+  max_iterations: 3
+  novelty_check:
+    enabled: true
+    top_k_for_llm: 0             # 0 = 全量喂 LLM
+    llm_judge_threshold: "equivalent"
+  data_availability:
+    enabled: true
+    data_schema_path: "configs/data_schema.yaml"
+    allow_derived_fields: true
+  business_rules:
+    enabled: true
+    rules_path: "configs/business_rules.yaml"
+
+# ---------- 代码生成与执行 ----------
+code_generation:
+  max_fix_rounds: 10
+  sandbox_timeout_sec: 60
+  sandbox_memory_mb: 2048
+  python_bin: "~/miniconda3/envs/factor-calc/bin/python"   # 因子计算专用 conda 环境的解释器
+  pct_rules_path: "skills/factor-calc/references/rules-zh.md"
+
+# ---------- 因子值相关性 ----------
+relevance:
+  enabled: true
+  corr_method: "spearman"
+  max_corr_to_library: 0.7
+  lookback_days: 250
+
+# ---------- 回测 ----------
+backtest:
+  enabled: true
+  mode: local                   # local | api | off
+  local:
+    backend: "alphalens-reloaded"
+    universe: ["csi800"]        # 可扩展为 ["csi800", "csi1000"]
+    start_date: "2019-01-01"
+    end_date: "auto"
+  api:
+    mode: async                 # sync | async
+    endpoint_submit: "http://localhost:8000/backtest"
+    endpoint_query: "http://localhost:8000/backtest/{task_id}"
+    poll_interval_sec: 5
+    timeout_sec: 600
+
+# ---------- 持久化 ----------
+persistence:
+  run_root: "data/runs"
+  checkpointer: "sqlite"
+  flush_each_node: true
+
+# ---------- 鲁棒性 ----------
+robustness:
+  llm_retry: 3
+  llm_retry_backoff_sec: [2, 5, 10]
+  json_repair: true
+  step_timeout_sec: 600
+  max_concurrency: 5            # 并行跑多少个子图（候选因子），LLM 限流时调小

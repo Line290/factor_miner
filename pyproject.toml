@@ -1,0 +1,32 @@
+[project]
+name = "factor-miner-agent"
+version = "0.1.0"
+description = "Single factor mining agent based on LangGraph"
+requires-python = ">=3.11"
+dependencies = [
+    "langgraph>=0.2.0",
+    "openai>=1.40",
+    "pydantic>=2.7",
+    "pyyaml>=6.0",
+    "pdfplumber>=0.11",
+    "pandas>=2.2",
+    "pyarrow>=16",
+    "loguru>=0.7",
+    "tenacity>=8.4",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff", "mypy"]
+backtest = ["alphalens-reloaded>=0.4"]
+
+[project.scripts]
+factor-miner = "src.main:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]

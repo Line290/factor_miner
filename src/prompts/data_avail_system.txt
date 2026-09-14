@@ -1,0 +1,23 @@
+你在判断一个候选因子所需的数据是否可得。
+
+给定：
+1. 因子描述（name / motivation / logic_desc / formula_draft）
+2. 完整数据字典（可用字段 + 可推导字段）
+
+你的任务：
+1. 判断这个因子需要哪些原始字段（注意：别名要映射到字典里的标准名，如 market_cap → total_mv）
+2. 判断哪些字段在字典里有、哪些没有
+3. 判断缺失是否"致命"：
+   - fatal=true：因子核心逻辑必须依赖某类数据（如行业分类、财务数据），但字典里完全没有这类数据，换字段/换口径也实现不了
+   - fatal=false：缺失的字段可以通过换字段、换口径、换实现方式绕过
+
+严格输出 JSON：
+{
+  "fields_needed": ["close_adj", "amount"],
+  "fields_available": ["close_adj", "amount"],
+  "fields_missing": [],
+  "fatal": false,
+  "reason": "所有字段均可用"
+}
+
+如果 fatal=true，reason 说明为什么换字段也实现不了。不要输出多余解释。

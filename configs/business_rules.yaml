@@ -1,0 +1,41 @@
+# 业务方向规则（初版，待与业务讨论后补全）
+# 本文件由 skills/business-rule-check 在 FineFilter 节点调用。
+# 规则分两类：
+#   1. keyword 类：直接在候选因子的 logic_desc / formula_draft 中字符串匹配；
+#   2. semantic 类：需要 LLM 判断（如"是否高频"），规则里写清楚判断标准即可。
+# ============================================================
+
+rules:
+  - id: no_high_freq_t0
+    name: "禁止高频 T0"
+    type: semantic
+    desc: |
+      不做持仓周期 < 1 个交易日的高频/T0 类因子。
+      判断标准：
+        - 因子信号生成频率为 tick / 分钟级；
+        - 或公式中出现"日内""T+0""当日买卖""高频"等关键词；
+        - 或持仓周期明确 < 5 个交易日。
+    match_keywords: ["T+0", "日内", "高频", "tick", "分钟级"]
+    severity: hard      # hard = 违反即淘汰；soft = 仅提示
+
+  - id: no_st
+    name: "禁止 ST 股"
+    type: semantic
+    desc: |
+      因子的股票池必须排除 ST/*ST 股。
+      判断标准：因子代码中若未显式过滤 is_st==1，即违反。
+    severity: hard
+
+  - id: no_new_listing
+    name: "禁止次新股"
+    type: semantic
+    desc: |
+      因子在信号日必须要求股票已上市 ≥ 252 个交易日（约 1 年）。
+      判断标准：因子代码中若未过滤 list_days < 252，即违反。
+    severity: hard
+
+  # TODO: 与业务讨论后补充，例如：
+  # - 不做纯题材/概念类因子（无基本面支撑）
+  # - 不做依赖未公开信息的因子
+  # - 不做换手率/成交额极端值因子（流动性陷阱）
+  # - 行业暴露限制（如不做纯行业轮动）

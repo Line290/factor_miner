@@ -1,0 +1,257 @@
+# 数据字典（初版：仅行情数据）
+# 本文件是"因子计算 SKILL"在数据可得性检查、代码生成时的唯一字段真相来源。
+# LLM 在判断"某因子需要的数据是否存在 / 是否可推导"时，只读本文件。
+# 后续接入财务、宏观、北向等数据时，按相同 schema 追加即可。
+#
+# 字段命名约定：
+#   - 价格类：close / open / high / low / vwap
+#   - 复权：用 adjust_factor 自行复权，或直接使用 *_adj 字段（如已落库）
+#   - 单位：金额一律元；股数一律股；市值一律元（不是万元）
+#
+# PIT 对齐：
+#   - 行情类：T 日收盘后可得，T+1 日可交易
+#   - 估值类：T 日收盘后计算
+#   - 状态类（is_st / list_days / suspend）：T 日实时，需用信号日时点版本
+# ============================================================
+
+fields:
+  # ---------- 日线行情 ----------
+  - name: open
+    dtype: float
+    freq: "1d"
+    desc: "开盘价（未复权）"
+    source: "本地 parquet / 行情库"
+    pit_note: "T 日 09:30 开盘后产生，T 日收盘后可用于 T+1 信号"
+    unit: "元"
+
+  - name: high
+    dtype: float
+    freq: "1d"
+    desc: "最高价（未复权）"
+    source: "本地 parquet / 行情库"
+    pit_note: "T 日收盘后可得"
+    unit: "元"
+
+  - name: low
+    dtype: float
+    freq: "1d"
+    desc: "最低价（未复权）"
+    source: "本地 parquet / 行情库"
+    pit_note: "T 日收盘后可得"
+    unit: "元"
+
+  - name: close
+    dtype: float
+    freq: "1d"
+    desc: "收盘价（未复权）"
+    source: "本地 parquet / 行情库"
+    pit_note: "T 日收盘后可得；计算收益/因子时必须用复权价"
+    unit: "元"
+
+  - name: vwap
+    dtype: float
+    freq: "1d"
+    desc: "成交量加权平均价（典型=amount/volume）"
+    source: "由 close/amount/volume 推导，也可直接落库"
+    pit_note: "T 日收盘后可得"
+    unit: "元"
+
+  - name: volume
+    dtype: float
+    freq: "1d"
+    desc: "成交量"
+    source: "本地 parquet / 行情库"
+    pit_note: "T 日收盘后可得"
+    unit: "股"
+
+  - name: amount
+    dtype: float
+    freq: "1d"
+    desc: "成交额"
+    source: "本地 parquet / 行情库"
+    pit_note: "T 日收盘后可得"
+    unit: "元"
+
+  - name: adjust_factor
+    dtype: float
+    freq: "1d"
+    desc: "复权因子（后复权）"
+    source: "本地 parquet / 行情库"
+    pit_note: "T 日收盘后可得；必须按信号日时点的因子版本复权，禁止用最新因子回补历史"
+    unit: ""
+
+  # ---------- 复权价（建议直接落库，避免每次复权出错） ----------
+  - name: close_adj
+    dtype: float
+    freq: "1d"
+    desc: "后复权收盘价（= close * adjust_factor）"
+    source: "可由 close * adjust_factor 推导"
+    pit_note: "计算收益率、均线、动量时必须用此字段"
+    unit: "元"
+
+  - name: open_adj
+    dtype: float
+    freq: "1d"
+    desc: "后复权开盘价"
+    source: "可由 open * adjust_factor 推导"
+    pit_note: ""
+    unit: "元"
+
+  # ---------- 估值 ----------
+  - name: pe_ttm
+    dtype: float
+    freq: "1d"
+    desc: "市盈率 TTM（整体法，亏损股为负或 NaN）"
+    source: "本地估值库"
+    pit_note: "T 日收盘后按最新财报计算；亏损股需显式处理"
+    unit: ""
+
+  - name: pb
+    dtype: float
+    freq: "1d"
+    desc: "市净率 MRQ"
+    source: "本地估值库"
+    pit_note: "T 日收盘后可得"
+    unit: ""
+
+  - name: ps_ttm
+    dtype: float
+    freq: "1d"
+    desc: "市销率 TTM"
+    source: "本地估值库"
+    pit_note: "T 日收盘后可得"
+    unit: ""
+
+  - name: dv_ttm
+    dtype: float
+    freq: "1d"
+    desc: "股息率 TTM（%）"
+    source: "本地估值库"
+    pit_note: "T 日收盘后可得"
+    unit: ""
+
+  # ---------- 规模 ----------
+  - name: total_mv
+    dtype: float
+    freq: "1d"
+    desc: "总市值"
+    source: "本地行情/估值库"
+    pit_note: "T 日收盘后计算"
+    unit: "元"
+
+  - name: circ_mv
+    dtype: float
+    freq: "1d"
+    desc: "流通市值"
+    source: "本地行情/估值库"
+    pit_note: "T 日收盘后计算"
+    unit: "元"
+
+  - name: float_shares
+    dtype: float
+    freq: "1d"
+    desc: "流通股本"
+    source: "本地行情库"
+    pit_note: "T 日时点版本；限售解禁后会变化，需用信号日版本"
+    unit: "股"
+
+  # ---------- 交易状态（用于业务规则过滤） ----------
+  - name: is_st
+    dtype: int
+    freq: "1d"
+    desc: "是否 ST/*ST（1=是，0=否）"
+    source: "本地股票状态库"
+    pit_note: "必须用信号日时点的 ST 状态，不能用最新 ST 状态回补历史"
+    unit: ""
+
+  - name: list_days
+    dtype: int
+    freq: "1d"
+    desc: "上市以来交易日数"
+    source: "本地股票状态库"
+    pit_note: "用于过滤上市不满一年（<252）"
+    unit: "日"
+
+  - name: suspend
+    dtype: int
+    freq: "1d"
+    desc: "是否停牌（1=停牌，0=正常）"
+    source: "本地行情库"
+    pit_note: "停牌日因子值通常 NaN，下游需处理"
+    unit: ""
+
+  - name: limit_status
+    dtype: int
+    freq: "1d"
+    desc: "涨跌停状态（0=正常，1=涨停，-1=跌停）"
+    source: "本地行情库"
+    pit_note: "T 日收盘后可得；T+1 成交时若涨跌停则不可交易"
+    unit: ""
+
+  # ---------- 指数成分（用于股票池定义） ----------
+  - name: csi800_member
+    dtype: int
+    freq: "1d"
+    desc: "当日是否为中证 800 成分股（1/0）"
+    source: "本地指数成分库"
+    pit_note: "必须用信号日时点的成分股名单，禁止用最新名单回补历史"
+    unit: ""
+
+  - name: csi1000_member
+    dtype: int
+    freq: "1d"
+    desc: "当日是否为中证 1000 成分股（1/0）"
+    source: "本地指数成分库"
+    pit_note: "同上"
+    unit: ""
+
+  # ---------- 北向资金（情绪类因子常用） ----------
+  - name: north_bound_holding
+    dtype: float
+    freq: "1d"
+    desc: "北向资金持股数量"
+    source: "本地沪深港通库"
+    pit_note: "T 日收盘后公布，T+1 可得"
+    unit: "股"
+
+  - name: north_bound_holding_ratio
+    dtype: float
+    freq: "1d"
+    desc: "北向持股占流通股比例"
+    source: "由 north_bound_holding / float_shares 推导"
+    pit_note: "T+1 可得"
+    unit: ""
+
+# ---------- 可推导字段（LLM 在数据可得性检查时可使用） ----------
+derived:
+  - name: ret_1d
+    formula: "close_adj.pct_change(1)"
+    desc: "日收益率"
+
+  - name: turnover_1d
+    formula: "volume / float_shares"
+    desc: "换手率"
+
+  - name: vwap
+    formula: "amount / volume"
+    desc: "VWAP"
+
+  - name: log_mv
+    formula: "log(total_mv)"
+    desc: "对数总市值"
+
+  - name: circ_mv_from_shares
+    formula: "close * float_shares"
+    desc: "流通市值（当 circ_mv 缺失时）"
+
+# ---------- 暂缺的数据大类（LLM 判断 fatal 时参考，不枚举别名字段） ----------
+# 注意：别名字段（如 market_cap / total_market_cap）由 LLM 在 data_avail 检查时
+# 自动映射到标准名（total_mv），不需要在这里维护。
+# 这里只放"整个大类都没有"的情况，LLM 判断 fatal=true 时参考。
+unavailable:
+  - name: industry_data
+    reason: "行业分类、行业指数行情均未接入；依赖行业分组/行业动量的因子暂不可用"
+  - name: financial_data
+    reason: "财务数据（ROE/净利润/毛利率等）尚未接入"
+  - name: fundamental_derived
+    reason: "基于财务报表的衍生指标未接入"
