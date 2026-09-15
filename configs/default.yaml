@@ -104,6 +104,7 @@ persistence:
   run_root: "data/runs"
   checkpointer: "sqlite"
   flush_each_node: true
+  session_store_path: "data/sessions.json"   # Agentic 会话元数据
 
 # ---------- 鲁棒性 ----------
 robustness:

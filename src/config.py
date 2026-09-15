@@ -123,6 +123,7 @@ class PersistenceConfig(BaseModel):
     run_root: Path
     checkpointer: str = "sqlite"
     flush_each_node: bool = True
+    session_store_path: Path = Path("data/sessions.json")   # Agentic 会话元数据
 
 
 class RobustnessConfig(BaseModel):
@@ -189,5 +190,9 @@ def load_config(path: str | Path = "configs/default.yaml") -> AppConfig:
         _resolve(raw["code_generation"]["pct_rules_path"])
     )
     raw["persistence"]["run_root"] = str(_resolve(raw["persistence"]["run_root"]))
+    if "session_store_path" in raw["persistence"]:
+        raw["persistence"]["session_store_path"] = str(
+            _resolve(raw["persistence"]["session_store_path"])
+        )
 
     return AppConfig.model_validate(raw)

@@ -148,11 +148,17 @@ def build_agent_graph(cfg: AppConfig, llm: LLMClient):
             if m.get("role") == "assistant" and not m.get("tool_calls"):
                 final = m.get("content") or ""
                 break
+        rounds = state.get("agent_rounds", 0)
+        n_calls = state.get("tool_calls_count", 0)
         logger.info(
-            f"[finalize] rounds={state.get('agent_rounds')} "
-            f"tool_calls={state.get('tool_calls_count')} answer_len={len(final)}"
+            f"[finalize] rounds={rounds} tool_calls={n_calls} answer_len={len(final)}"
         )
-        return {"finished_at": datetime.now(), "final_answer": final}
+        return {
+            "finished_at": datetime.now(),
+            "final_answer": final,
+            "agent_rounds": rounds,
+            "tool_calls_count": n_calls,
+        }
 
     def route_after_agent(state: AgentSessionState) -> str:
         if state.get("agent_rounds", 0) >= cfg.agent.max_agent_rounds:

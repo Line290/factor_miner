@@ -43,8 +43,11 @@ def _flatten_roadshow_json(path: str) -> str:
     return "\n".join(lines)
 
 
-def ingest_node(state: MinerState) -> dict:
-    path = state["material_path"]
+def ingest_file(path: str) -> tuple[MaterialMeta, str]:
+    """解析材料文件（PDF/JSON）为 (MaterialMeta, 全文文本)。
+
+    供 ingest_node 与 Agentic CLI 入口共用。
+    """
     p = Path(path)
     if not p.exists():
         raise FileNotFoundError(f"Material not found: {path}")
@@ -60,9 +63,8 @@ def ingest_node(state: MinerState) -> dict:
     else:
         raise ValueError(f"Unsupported material type: {suffix} (use .pdf or .json)")
 
-    run_id = state.get("run_id") or _gen_run_id(path)
     material = MaterialMeta(
-        run_id=run_id,
+        run_id=_gen_run_id(path),
         path=str(p.resolve()),
         type=mtype,  # type: ignore[arg-type]
         title=p.stem,
@@ -70,6 +72,14 @@ def ingest_node(state: MinerState) -> dict:
         loaded_at=datetime.now(),
     )
     logger.info(f"Ingested {path} ({mtype}, {len(text)} chars, {pages} pages)")
+    return material, text
+
+
+def ingest_node(state: MinerState) -> dict:
+    path = state["material_path"]
+    material, text = ingest_file(path)
+    run_id = state.get("run_id") or material.run_id
+    logger.info(f"run_id={run_id}")
     return {
         "material": material,
         "material_text": text,
