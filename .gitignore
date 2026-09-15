@@ -36,6 +36,8 @@ data/runs/
 *.db
 *.sqlite
 *.sqlite3
+*.sqlite-shm
+*.sqlite-wal
 
 # ---- Logs ----
 *.log
