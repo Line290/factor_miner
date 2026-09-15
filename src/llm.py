@@ -57,6 +57,8 @@ class LLMClient:
         node: str | None = None,
         temperature: float | None = None,
         json_mode: bool = False,
+        tools: list[dict] | None = None,
+        tool_choice: str = "auto",
     ) -> str:
         """Multi-turn chat with explicit messages array."""
         model = self._resolve_model(node)
@@ -67,6 +69,9 @@ class LLMClient:
         }
         if json_mode:
             kwargs["response_format"] = {"type": "json_object"}
+        if tools:
+            kwargs["tools"] = tools
+            kwargs["tool_choice"] = tool_choice
 
         resp = self.client.chat.completions.create(**kwargs)
         content = resp.choices[0].message.content or ""
