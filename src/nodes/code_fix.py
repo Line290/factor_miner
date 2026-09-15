@@ -27,8 +27,8 @@ def code_fix_node(
     # Build full fix history for LLM context
     history_lines = []
     for step in c.code_fix_history:
-        status = "成功" if step.success else f"失败: {(step.error or 'n/a')[:300]}"
-        code_preview = step.python_code[:800] if step.python_code else "n/a"
+        status = "成功" if step.success else f"失败: {step.error or 'n/a'}"
+        code_preview = step.python_code or "n/a"
         history_lines.append(f"--- 第 {step.round} 轮 ---\n```python\n{code_preview}\n```\n结果: {status}")
     history_text = "\n\n".join(history_lines) if history_lines else "（无历史）"
 
