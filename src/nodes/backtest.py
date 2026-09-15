@@ -111,4 +111,69 @@ def backtest_node(state: dict, *, cfg: AppConfig, run_dir: Path) -> dict:
     c.backtest_report_path = str(report_path)
 
     logger.info(f"Backtest {c.candidate_id}: IC={c.ic}, IR={c.ir}, days={len(daily_ic)}")
+
+    # ---- Auto archive to factor library ----
+    aa = cfg.backtest.auto_archive
+    if aa.enabled and c.ic is not None and c.ir is not None:
+        if c.ic >= aa.min_ic and c.ir >= aa.min_ir:
+            _archive_factor(c, cfg)
+        else:
+            logger.info(
+                f"{c.candidate_id} IC={c.ic} IR={c.ir} below archive threshold "
+                f"(IC>={aa.min_ic}, IR>={aa.min_ir}), not archived"
+            )
+
     return {"candidate": c.model_dump()}
+
+
+def _archive_factor(c: CandidateRecord, cfg: AppConfig) -> None:
+    """Archive a mined factor to the local factor library."""
+    import shutil
+    import yaml
+    from datetime import datetime
+
+    run_root = Path(cfg.persistence.run_root)
+    library_dir = run_root.parent / "library_factors"
+    index_path = run_root.parent / "configs" / "factor_library_index.yaml"
+    library_dir.mkdir(parents=True, exist_ok=True)
+
+    # Unique id: mined_<name>_<date>, dedup if exists
+    base_id = f"mined_{c.name.lower().replace(' ', '_')}"
+    factor_id = base_id
+    existing = set()
+    if index_path.exists():
+        data = yaml.safe_load(index_path.read_text(encoding="utf-8")) or {}
+        existing = {f["id"] for f in data.get("factors", [])}
+    suffix = 1
+    while factor_id in existing:
+        suffix += 1
+        factor_id = f"{base_id}_{suffix}"
+
+    # Copy factor values
+    src_parquet = Path(c.factor_values_path)
+    dst_parquet = library_dir / f"{factor_id}.parquet"
+    shutil.copy2(src_parquet, dst_parquet)
+
+    # Append to index yaml
+    entry = {
+        "id": factor_id,
+        "name": c.name,
+        "category": "mined",
+        "logic_desc": c.logic_desc,
+        "formula": c.formula_latex or c.formula_draft,
+        "pit_note": f"auto-mined, IC={c.ic}, IR={c.ir}",
+        "values_path": str(dst_parquet),
+        "source_run_dir": str(c.factor_values_path).split("/factors/")[0],
+        "source_candidate_id": c.candidate_id,
+        "archived_at": datetime.now().isoformat(),
+    }
+    if index_path.exists():
+        data = yaml.safe_load(index_path.read_text(encoding="utf-8")) or {}
+    else:
+        data = {"factors": []}
+    data.setdefault("factors", []).append(entry)
+    index_path.write_text(
+        yaml.dump(data, allow_unicode=True, default_flow_style=False, sort_keys=False),
+        encoding="utf-8",
+    )
+    logger.info(f"Archived factor: {factor_id} → {dst_parquet}")

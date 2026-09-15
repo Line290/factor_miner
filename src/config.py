@@ -105,10 +105,17 @@ class BacktestAPIConfig(BaseModel):
     timeout_sec: int = 600
 
 
+class AutoArchiveConfig(BaseModel):
+    enabled: bool = True
+    min_ic: float = 0.03
+    min_ir: float = 0.3
+
+
 class BacktestConfig(BaseModel):
     enabled: bool = True
     mode: str = "local"
     local: BacktestLocalConfig
+    auto_archive: AutoArchiveConfig = AutoArchiveConfig()
     api: BacktestAPIConfig
 
 

@@ -16,9 +16,9 @@ llm:
   # 代码生成/修复节点可用更强模型（可选覆盖）
   overrides:
     generate_factor:
-      model: "deepseek-v4-flash-0731"
+      model: "qwen3.8-27b"
     code_fix:
-      model: "deepseek-v4-flash-0731"
+      model: "qwen3.8-27b"
 
 # ---------- 输入材料 ----------
 material:
@@ -44,7 +44,7 @@ coarse_judge:
       name: "逻辑清晰度"
       desc: "动机与公式之间的因果链是否自洽，1-5 分"
   pass_threshold: 3.0           # 首轮跑完后校准
-  min_dim_score: 2.0
+  min_dim_score: 3.0
   fail_action: "mark_and_archive"
 
 # ---------- 细筛 ----------
@@ -87,6 +87,11 @@ backtest:
     start_date: "2019-01-01"
     end_date: "auto"
     min_list_days: 252          # 上市不满一年剔除
+  # 跑完后自动入库：满足 IC/IR 阈值的因子自动加入因子库
+  auto_archive:
+    enabled: true
+    min_ic: 0.03                # Rank IC 均值下限
+    min_ir: 0.3                 # Rank IR 下限
   api:
     mode: async                 # sync | async
     endpoint_submit: "http://localhost:8000/backtest"
