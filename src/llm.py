@@ -29,11 +29,6 @@ class LLMClient:
             return self.cfg.overrides[node].get("model", self.cfg.model)
         return self.cfg.model
 
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=2, max=10),
-        reraise=True,
-    )
     def chat(
         self,
         system: str,
@@ -43,13 +38,31 @@ class LLMClient:
         temperature: float | None = None,
         json_mode: bool = False,
     ) -> str:
+        return self.chat_messages(
+            [{"role": "system", "content": system}, {"role": "user", "content": user}],
+            node=node,
+            temperature=temperature,
+            json_mode=json_mode,
+        )
+
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        reraise=True,
+    )
+    def chat_messages(
+        self,
+        messages: list[dict],
+        *,
+        node: str | None = None,
+        temperature: float | None = None,
+        json_mode: bool = False,
+    ) -> str:
+        """Multi-turn chat with explicit messages array."""
         model = self._resolve_model(node)
         kwargs: dict[str, Any] = {
             "model": model,
-            "messages": [
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
+            "messages": messages,
             "temperature": temperature if temperature is not None else self.cfg.temperature,
         }
         if json_mode:
@@ -58,7 +71,7 @@ class LLMClient:
         resp = self.client.chat.completions.create(**kwargs)
         content = resp.choices[0].message.content or ""
         logger.debug(
-            f"LLM call model={model} node={node} "
+            f"LLM call model={model} node={node} msgs={len(messages)} "
             f"prompt_tokens={resp.usage.prompt_tokens if resp.usage else '?'} "
             f"completion_tokens={resp.usage.completion_tokens if resp.usage else '?'}"
         )

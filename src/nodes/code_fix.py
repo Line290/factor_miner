@@ -1,6 +1,7 @@
 """CodeFix node: LLM fixes factor code based on sandbox error."""
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from loguru import logger
@@ -24,32 +25,38 @@ def code_fix_node(
     pit_rules = Path(cfg.code_generation.pct_rules_path).read_text(encoding="utf-8")
     system = load_prompt("code_fix_system", PIT_RULES=pit_rules)
 
-    # Build full fix history for LLM context
-    history_lines = []
+    # Build true multi-turn messages: system + (user request, assistant code, user feedback) per round
+    messages: list[dict] = [{"role": "system", "content": system}]
+
     for step in c.code_fix_history:
-        status = "成功" if step.success else f"失败: {step.error or 'n/a'}"
-        code_preview = step.python_code or "n/a"
-        history_lines.append(f"--- 第 {step.round} 轮 ---\n```python\n{code_preview}\n```\n结果: {status}")
-    history_text = "\n\n".join(history_lines) if history_lines else "（无历史）"
+        if step.python_code:
+            messages.append({"role": "assistant", "content": json.dumps({
+                "python_code": step.python_code,
+            }, ensure_ascii=False)})
+        if step.success:
+            messages.append({"role": "user", "content": "代码执行成功。"})
+        else:
+            messages.append({"role": "user", "content": f"代码执行失败，报错：\n{step.error or 'n/a'}"})
 
-    user_msg = f"""上一次代码执行失败：
+    # Current round request
+    messages.append({"role": "user", "content": f"""请修复代码。
 
-【报错信息】
+当前代码：
+```python
+{c.python_code}
+```
+
+最新报错：
 {c.code_last_error}
 
-【之前修复尝试】
-{history_text}
-
-【原代码】
-{c.python_code}
-
-【可用字段】
+可用字段：
 {data_schema.summary_for_llm()}
 
-请修复代码，保持因子逻辑不变。注意：不要重复之前已经失败的写法。"""
+注意：不要重复之前已经失败的写法。"""})
 
     try:
-        resp = llm.chat_json(system, user_msg, node="code_fix")
+        raw = llm.chat_messages(messages, node="code_fix", json_mode=True)
+        resp = llm._parse_json(raw)
         c.python_code = str(resp.get("python_code", c.python_code))
         new_fields = list(resp.get("required_fields", []))
         for f in new_fields:
