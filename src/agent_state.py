@@ -20,6 +20,10 @@ class AgentSessionState(TypedDict, total=False):
     task: str                      # 用户本轮任务描述
     material_path: str | None      # 可选输入材料（研报/论文/纪要）
 
+    # 材料（CLI 入口 ingest 后注入）
+    material: dict | None          # MaterialMeta.model_dump()
+    material_text: str | None      # 解析后的全文
+
     # ReAct 消息栈
     messages: Annotated[list[dict], add]
 
@@ -29,6 +33,7 @@ class AgentSessionState(TypedDict, total=False):
 
     # 因子挖掘产出（finalize 阶段回填）
     candidates: list[CandidateRecord]
+    final_answer: str              # 最终回复文本
 
     # 错误收集
     errors: Annotated[list[str], add]

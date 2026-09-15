@@ -97,8 +97,8 @@ M4 模块：
 |---|---|---|---|
 | MA1 | LLM 客户端扩展 | `chat_message` 返回完整 message（tool_calls 透传）+ `chat_stream` 流式 + qwen 冒烟 | ✅ 2026-09-15 |
 | MA2 | 会话状态与消息模型 | `AgentSessionState` + 消息构造/校验/截断 | ✅ 2026-09-15 |
-| MA3 | 工具注册表 | 7 个工具 schema + 执行函数适配 | ⬜ |
-| MA4 | ReAct 主循环图 | agent/tools/finalize + 条件路由 + 轮数保护 | ⬜ |
+| MA3 | 工具注册表 | 7 个工具 schema + 执行函数适配 | ✅ 2026-09-15 |
+| MA4 | ReAct 主循环图 | agent/tools/finalize + 条件路由 + 轮数保护 | ✅ 2026-09-15 |
 | MA5 | 会话持久化 | threads 元数据 + `--list-sessions` / `--resume` | ⬜ |
 | MA6 | CLI 批处理入口 | `--task`/`--material`/`--resume` + 流式终端 | ⬜ |
 | MA7 | 安全保护 | 轮数上限、输出截断、token 预算 | ⬜ |
@@ -111,3 +111,10 @@ M4 模块：
 - 冒烟测试 `scripts/smoke_tool_calls.py` 真实调用 qwen3.7-flash：第 1 轮返回 `add_numbers` tool_call，工具执行回填后第 2 轮模型给出最终答案 579，tool_call_id 严格匹配。
 - 关键决策：消息模型用 OpenAI 原生 dict（非 langchain BaseMessage），零转换成本。
 - 单测：`tests/test_llm_tool_calls.py`（5 用例）+ `tests/test_agent_state.py`（10 用例）全绿。
+
+**MA3/MA4 实现记录（2026-09-15）**：
+- MA3 `src/agent_tools/registry.py`：7 个工具（read_material / query_data_schema / query_factor_library / query_business_rules / run_factor_code / run_backtest / save_factor），OpenAI tools schema + `dispatch()` 统一异常包装与输出截断。
+- MA4 `src/agent_graph.py`：手写 StateGraph ReAct 循环（agent → tools → agent），条件路由 + `max_agent_rounds` 轮数保护 + 复用 `checkpoints.sqlite`（thread_id = 会话）。
+- 首轮自动注入 system 提示并整体写回消息栈（会话完整性）。
+- 端到端冒烟 `scripts/smoke_agent_session.py` 真实跑通：qwen3.7-flash 自主连续调用 `query_data_schema` + `query_factor_library` 两个工具并给出结构化总结。
+- 单测：`tests/test_agent_tools.py`（11 用例）+ `tests/test_agent_graph.py`（4 用例，含循环/轮数保护/checkpointer 恢复）。

@@ -112,3 +112,10 @@ robustness:
   json_repair: true
   step_timeout_sec: 600
   max_concurrency: 5            # 并行跑多少个子图（候选因子），LLM 限流时调小
+
+# ---------- Agentic 会话模式（Claude Code 式 ReAct） ----------
+agent:
+  max_agent_rounds: 30          # agent 节点最大轮数，超限强制收尾（防死循环）
+  tool_output_truncate_chars: 8000   # 单条工具输出截断
+  messages_max_tokens_ratio: 0.6     # 消息栈 token 预算 = 模型窗口 × 比例
+  human_in_the_loop: false      # 高风险工具调用前人工确认（默认全自动）
