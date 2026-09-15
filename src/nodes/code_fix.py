@@ -1,7 +1,6 @@
 """CodeFix node: LLM fixes factor code based on sandbox error."""
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 from loguru import logger
@@ -25,34 +24,22 @@ def code_fix_node(
     pit_rules = Path(cfg.code_generation.pct_rules_path).read_text(encoding="utf-8")
     system = load_prompt("code_fix_system", PIT_RULES=pit_rules)
 
-    # Build true multi-turn messages: system + (user request, assistant code, user feedback) per round
+    # Build true multi-turn messages: system + (assistant code, user execution result) per round
     messages: list[dict] = [{"role": "system", "content": system}]
 
     for step in c.code_fix_history:
         if step.python_code:
-            messages.append({"role": "assistant", "content": json.dumps({
-                "python_code": step.python_code,
-            }, ensure_ascii=False)})
+            messages.append({"role": "assistant", "content": step.python_code})
         if step.success:
             messages.append({"role": "user", "content": "代码执行成功。"})
         else:
             messages.append({"role": "user", "content": f"代码执行失败，报错：\n{step.error or 'n/a'}"})
 
-    # Current round request
-    messages.append({"role": "user", "content": f"""请修复代码。
-
-当前代码：
-```python
-{c.python_code}
-```
-
-最新报错：
-{c.code_last_error}
-
+    # Instruction for current fix round (no need to repeat code/error — already in history)
+    messages.append({"role": "user", "content": f"""请修复代码，保持因子逻辑不变。
 可用字段：
 {data_schema.summary_for_llm()}
-
-注意：不要重复之前已经失败的写法。"""})
+不要重复之前已经失败的写法。"""})
 
     try:
         raw = llm.chat_messages(messages, node="code_fix", json_mode=True)
