@@ -87,3 +87,27 @@ M4 模块：
 ## 进度更新规则
 
 每完成一个模块，把上表状态从 ⬜ 改成 ✅，并在对应模块文档末尾追加"实现记录"小节（提交日期、关键决策、偏离设计文档之处）。
+
+## Agentic 会话改造（feat/claude-code-like-agent）
+
+> 规划文档：[`../agentic_session_refactor_plan.md`](../agentic_session_refactor_plan.md)
+> 目标：Claude Code 式长程会话 + 工具调用（ReAct 循环），直接替换流水线 DAG
+
+| ID | 模块 | 范围 | 状态 |
+|---|---|---|---|
+| MA1 | LLM 客户端扩展 | `chat_message` 返回完整 message（tool_calls 透传）+ `chat_stream` 流式 + qwen 冒烟 | ✅ 2026-09-15 |
+| MA2 | 会话状态与消息模型 | `AgentSessionState` + 消息构造/校验/截断 | ✅ 2026-09-15 |
+| MA3 | 工具注册表 | 7 个工具 schema + 执行函数适配 | ⬜ |
+| MA4 | ReAct 主循环图 | agent/tools/finalize + 条件路由 + 轮数保护 | ⬜ |
+| MA5 | 会话持久化 | threads 元数据 + `--list-sessions` / `--resume` | ⬜ |
+| MA6 | CLI 批处理入口 | `--task`/`--material`/`--resume` + 流式终端 | ⬜ |
+| MA7 | 安全保护 | 轮数上限、输出截断、token 预算 | ⬜ |
+| MA8 | 上下文压缩 | 摘要生成与替换（基础版） | ⬜ |
+| MA9 | 流水线迁移与退役 | 旧节点逻辑迁移 + 对照回归 | ⬜ |
+| MA10 | 测试与验收 | 全量测试、文档、演示 | ⬜ |
+
+**MA1/MA2 实现记录（2026-09-15）**：
+- `LLMClient` 新增 `chat_message()`（返回 OpenAI 原生 assistant message dict，tool_calls 原样透传）与 `chat_stream()`（流式增量，yield content / tool_calls 分片）；旧 `chat_messages()` 接口保持字符串返回，向后兼容。
+- 冒烟测试 `scripts/smoke_tool_calls.py` 真实调用 qwen3.7-flash：第 1 轮返回 `add_numbers` tool_call，工具执行回填后第 2 轮模型给出最终答案 579，tool_call_id 严格匹配。
+- 关键决策：消息模型用 OpenAI 原生 dict（非 langchain BaseMessage），零转换成本。
+- 单测：`tests/test_llm_tool_calls.py`（5 用例）+ `tests/test_agent_state.py`（10 用例）全绿。
