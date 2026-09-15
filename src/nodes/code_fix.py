@@ -48,9 +48,9 @@ def code_fix_node(
         if step.python_code:
             messages.append({"role": "assistant", "content": step.python_code})
         if step.success:
-            messages.append({"role": "user", "content": "[工具执行结果] 代码执行成功。"})
+            messages.append({"role": "user", "content": "代码执行成功。"})
         else:
-            messages.append({"role": "user", "content": f"[工具执行结果] 代码执行失败，报错：\n{step.error or 'n/a'}"})
+            messages.append({"role": "user", "content": f"代码执行失败，报错：\n{step.error or 'n/a'}"})
 
     try:
         raw = llm.chat_messages(messages, node="code_fix", json_mode=True)
