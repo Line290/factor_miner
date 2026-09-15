@@ -22,10 +22,27 @@ def code_fix_node(
     c = CandidateRecord(**state["candidate"])
 
     pit_rules = Path(cfg.code_generation.pct_rules_path).read_text(encoding="utf-8")
-    system = load_prompt("code_fix_system", PIT_RULES=pit_rules)
 
-    # Build true multi-turn messages: system + (assistant code, user execution result) per round
+    # system: 角色 + PIT规范 + 可用字段
+    system = load_prompt(
+        "code_fix_system",
+        PIT_RULES=pit_rules,
+        FIELDS=data_schema.summary_for_llm(),
+    )
+
+    # messages: system → user(初始任务) → assistant(代码) → user(执行结果) → ...
     messages: list[dict] = [{"role": "system", "content": system}]
+
+    # First user message: the original task
+    messages.append({"role": "user", "content": f"""请编写因子计算代码。
+
+因子信息：
+- name: {c.name}
+- motivation: {c.motivation}
+- logic_desc: {c.logic_desc}
+- formula_draft: {c.formula_draft}
+
+输出 JSON: {{"python_code": "...", "required_fields": [...]}}"""})
 
     for step in c.code_fix_history:
         if step.python_code:
@@ -34,12 +51,6 @@ def code_fix_node(
             messages.append({"role": "user", "content": "代码执行成功。"})
         else:
             messages.append({"role": "user", "content": f"代码执行失败，报错：\n{step.error or 'n/a'}"})
-
-    # Instruction for current fix round (no need to repeat code/error — already in history)
-    messages.append({"role": "user", "content": f"""请修复代码，保持因子逻辑不变。
-可用字段：
-{data_schema.summary_for_llm()}
-不要重复之前已经失败的写法。"""})
 
     try:
         raw = llm.chat_messages(messages, node="code_fix", json_mode=True)
