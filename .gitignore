@@ -32,6 +32,8 @@ data/parquet/
 data/library_factors/
 data/factor_library/
 data/runs/
+data/checkpoints.sqlite
+data/sessions.json
 *.parquet
 *.db
 *.sqlite

@@ -1,12 +1,12 @@
-"""CLI entrypoint.
+"""CLI entrypoint（Agentic 模式 = 唯一入口，MA9 起旧流水线入口已退役）。
 
-Agentic 模式（默认，Claude Code 式 ReAct 会话）:
+Claude Code 式长程会话:
     python -m src.main --task "从研报提炼 2 个因子" [--material path]
     python -m src.main --resume <thread_id>
     python -m src.main --list-sessions
 
-Pipeline 模式（旧流水线，MA9 退役前保留）:
-    python -m src.main --mode pipeline --material path [--resume <run_id>]
+旧流水线 DAG（确定性 pipeline）已在 MA9 退役：其节点逻辑已迁移为
+Agentic 工具（read_material/query_*/run_*/save_factor），main 分支保留旧实现可回退。
 """
 from __future__ import annotations
 
@@ -22,9 +22,7 @@ from .agent_graph import build_agent_graph
 from .config import load_config
 from .llm import LLMClient
 from .nodes.ingest import ingest_file
-from .persistence import RunRecorder
 from .session_store import SessionStore
-from .state import MinerState
 
 
 def _gen_session_id() -> str:
@@ -117,15 +115,12 @@ def run_agentic_session(
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Factor Miner Agent")
-    parser.add_argument("--mode", choices=["agentic", "pipeline"], default="agentic",
-                        help="agentic=Claude Code 式会话（默认）；pipeline=旧流水线（MA9 退役）")
-    parser.add_argument("--task", default=None, help="Agentic 模式：任务描述")
+    parser = argparse.ArgumentParser(description="Factor Miner Agent（Agentic 会话，Claude Code 式 ReAct）")
+    parser.add_argument("--task", default=None, help="任务描述（新会话必填）")
     parser.add_argument("--material", default=None, help="输入材料 (.pdf/.json)")
     parser.add_argument("--config", default="configs/default.yaml", help="Path to YAML config")
-    parser.add_argument("--resume", default=None, help="恢复会话 thread_id（agentic）/ run_id（pipeline）")
-    parser.add_argument("--list-sessions", action="store_true", help="列出历史 Agentic 会话")
-    parser.add_argument("--run-id", default=None, help="Pipeline: override run id")
+    parser.add_argument("--resume", default=None, help="恢复会话 thread_id")
+    parser.add_argument("--list-sessions", action="store_true", help="列出历史会话")
     args = parser.parse_args()
 
     load_dotenv()
@@ -135,56 +130,19 @@ def main() -> int:
     cfg = load_config(args.config)
     llm = LLMClient(cfg.llm)
 
-    # ---------- Agentic 模式（默认） ----------
-    if args.mode == "agentic":
-        if args.list_sessions:
-            _print_session_table(SessionStore(cfg.persistence.session_store_path))
-            return 0
-        try:
-            out = run_agentic_session(cfg, llm, task=args.task,
-                                      material_path=args.material, resume=args.resume)
-        except (ValueError, FileNotFoundError) as e:
-            print(f"错误: {e}")
-            return 1
-        print("\n==== 最终答案 ====")
-        print(out.get("final_answer", "") or "（无最终输出，可能被轮数上限截停）")
-        print(f"\n[会话 {out['thread_id']} 完成] rounds={out.get('agent_rounds', 0)} tools={out.get('tool_calls_count', 0)}")
+    if args.list_sessions:
+        _print_session_table(SessionStore(cfg.persistence.session_store_path))
         return 0
-
-    # ---------- Pipeline 模式（旧流水线，MA9 退役） ----------
-    graph, holder = build_graph_legacy(cfg, llm)
-
-    if args.resume:
-        thread_id = args.resume
-        holder["recorder"] = RunRecorder.resume(thread_id, cfg)
-        logger.info(f"Resuming run: {thread_id}")
-        final_state = graph.invoke(None, config={
-            "configurable": {"thread_id": thread_id,
-                             "max_concurrency": cfg.robustness.max_concurrency},
-        })
-    else:
-        if not args.material:
-            parser.error("pipeline 模式需要 --material（或 --resume）")
-        material_path = str(Path(args.material).resolve())
-        thread_id = args.run_id or datetime.now().strftime("%Y%m%d_%H%M%S") + "__" + Path(material_path).stem[:40].replace(" ", "_")
-        initial: MinerState = {"material_path": material_path, "run_id": thread_id}
-        logger.info(f"Starting run: {thread_id}")
-        final_state = graph.invoke(initial, config={
-            "configurable": {"thread_id": thread_id,
-                             "max_concurrency": cfg.robustness.max_concurrency},
-        })
-
-    recorder = holder.get("recorder")
-    if recorder:
-        recorder.finalize()
-        logger.info(f"Done. Run record at: {recorder.path()}")
+    try:
+        out = run_agentic_session(cfg, llm, task=args.task,
+                                  material_path=args.material, resume=args.resume)
+    except (ValueError, FileNotFoundError) as e:
+        print(f"错误: {e}")
+        return 1
+    print("\n==== 最终答案 ====")
+    print(out.get("final_answer", "") or "（无最终输出，可能被轮数上限截停）")
+    print(f"\n[会话 {out['thread_id']} 完成] rounds={out.get('agent_rounds', 0)} tools={out.get('tool_calls_count', 0)}")
     return 0
-
-
-def build_graph_legacy(cfg, llm):
-    """旧流水线图（延迟 import，避免 agentic 模式加载无关依赖）。"""
-    from .graph import build_graph
-    return build_graph(cfg, llm)
 
 
 if __name__ == "__main__":

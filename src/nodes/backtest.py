@@ -133,8 +133,9 @@ def _archive_factor(c: CandidateRecord, cfg: AppConfig) -> None:
     from datetime import datetime
 
     run_root = Path(cfg.persistence.run_root)
+    project_root = run_root.parent.parent          # <root>/data/runs → <root>
     library_dir = run_root.parent / "library_factors"
-    index_path = run_root.parent / "configs" / "factor_library_index.yaml"
+    index_path = project_root / "configs" / "factor_library_index.yaml"
     library_dir.mkdir(parents=True, exist_ok=True)
 
     # Unique id: mined_<name>_<date>, dedup if exists

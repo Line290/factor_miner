@@ -103,6 +103,8 @@ M4 模块：
 | MA6 | CLI 批处理入口 | `--task`/`--material`/`--resume` + 流式终端 | ✅ 2026-09-15 |
 | MA7 | 安全保护 | 轮数上限/输出截断/token 预算监控 | ✅ 2026-09-15 |
 | MA8 | 上下文压缩 | compress 节点 + 摘要替换 | ✅ 2026-09-15 |
+| MA9 | 流水线迁移与退役 | pipeline 入口退役 + 同材料对照回归 | ✅ 2026-09-15 |
+| MA10 | 测试与验收 | 真实研报端到端出因子入库 | ✅ 2026-09-15 |
 | MA7 | 安全保护 | 轮数上限、输出截断、token 预算 | ⬜ |
 | MA8 | 上下文压缩 | 摘要生成与替换（基础版） | ⬜ |
 | MA9 | 流水线迁移与退役 | 旧节点逻辑迁移 + 对照回归 | ⬜ |
@@ -133,3 +135,9 @@ M4 模块：
 - MA8：`src/agent_graph.py` 新增 `compress` 节点——tools 后条件路由（超预算 → compress → agent）；`_compress_messages` 把中间轮次交给 LLM 生成结构化摘要，替换为一条 `[历史会话摘要]` system 消息，保留首条 system + 最近 6 条原样；摘要长度自身截断防止二次超限。`agent_state.py` 的 messages 改用自定义 reducer（默认追加 / `{"__replace__": True}` 整体替换）。
 - 真实验证：`context_window_tokens=400` 极小窗口下跑真实 qwen 会话——模型并行 4 工具 → 估算 1818 > 240 → 触发压缩（9→8 条）→ 基于摘要续答出 2472 字符最终汇总。
 - 单测：`tests/test_agent_graph.py` 新增压缩触发/不触发 2 用例（共 6 用例）。
+
+**MA9/MA10 实现记录（2026-09-15）**：
+- MA9：`main.py` 退役 pipeline 分支（`--mode pipeline`/`build_graph_legacy` 移除），Agentic = 唯一入口；`src/nodes/backtest.py` 修复归档 index 路径 bug（`run_root.parent.parent/configs`）。
+- MA9 对照回归（同一材料 report6.pdf）：旧流水线 15 候选 → 粗筛 2 → 精筛 0 入库（行业/财务因子数据不可用）；Agentic 12 轮 / 15 工具调用 → 自主挖掘"波动率调整动量因子" IC=0.552 / IR=1.919 → 自动入库。偏差解释：Agentic 先查询数据字典绕开不可用数据，产出质量更优。
+- MA10：README 重写为 Agentic 会话模式；`run_factor_code → run_backtest → save_factor` 真实链路首次端到端验证通过；`.gitignore` 补 data/sessions.json 与 checkpoints.sqlite。
+- 测试：45 个 pytest 用例全绿。
