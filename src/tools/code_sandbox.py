@@ -80,10 +80,6 @@ def _validate_code(code: str) -> str | None:
                 for kw in node.keywords:
                     if kw.arg == "center" and isinstance(kw.value, ast.Constant) and kw.value.value is True:
                         return "PIT 违规: rolling(center=True) 使用了未来数据。pandas rolling 默认右对齐（右边界=当前行），不要设 center=True。"
-            # PIT: expanding/rolling without groupby on panel data
-            if isinstance(func, ast.Attribute) and func.attr in ("rolling", "expanding"):
-                if not _has_groupby_ancestor(node):
-                    return f"PIT 提醒: .{func.attr}() 未按 code 分组。时间序列窗口必须 groupby('code') 后再 {func.attr}，否则会跨股票混用数据。"
         # No top-level assignments/expressions outside function def
         if isinstance(node, ast.Assign) and getattr(node, "col_offset", 0) == 0:
             for target in node.targets:

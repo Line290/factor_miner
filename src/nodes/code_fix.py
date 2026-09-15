@@ -24,10 +24,20 @@ def code_fix_node(
     pit_rules = Path(cfg.code_generation.pct_rules_path).read_text(encoding="utf-8")
     system = load_prompt("code_fix_system", PIT_RULES=pit_rules)
 
+    # Build fix history for LLM context
+    history_lines = []
+    for step in c.code_fix_history[-3:]:  # last 3 rounds
+        status = "成功" if step.success else f"失败: {step.error[:200] if step.error else 'n/a'}"
+        history_lines.append(f"--- 第 {step.round} 轮 ---\n{step.python_code[:500]}\n结果: {status}")
+    history_text = "\n\n".join(history_lines) if history_lines else "（无历史）"
+
     user_msg = f"""上一次代码执行失败：
 
 【报错信息】
 {c.code_last_error}
+
+【之前修复尝试】
+{history_text}
 
 【原代码】
 {c.python_code}
@@ -35,7 +45,7 @@ def code_fix_node(
 【可用字段】
 {data_schema.summary_for_llm()}
 
-请修复代码，保持因子逻辑不变。"""
+请修复代码，保持因子逻辑不变。注意：不要重复之前已经失败的写法。"""
 
     try:
         resp = llm.chat_json(system, user_msg, node="code_fix")
