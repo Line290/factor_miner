@@ -188,7 +188,8 @@ def build_graph(cfg: AppConfig, llm: LLMClient):
         if not passed:
             logger.info("All candidates rejected by coarse judge.")
             return []
-        logger.info(f"Dispatching {len(passed)} candidates to subgraph ...")
+        logger.info(f"Dispatching {len(passed)} candidates: "
+                    + ", ".join(f"{c.candidate_id}({c.status})" for c in passed))
         return [
             Send("per_candidate_subgraph", {
                 "candidate": c.model_dump(),

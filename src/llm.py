@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 from typing import Any
 
 from loguru import logger
@@ -11,6 +12,14 @@ from openai import OpenAI
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from .config import LLMConfig
+
+
+def _log_retry(retry_state) -> None:
+    logger.warning(
+        f"LLM 调用第 {retry_state.attempt_number} 次尝试失败: "
+        f"{retry_state.outcome.exception()}; "
+        f"{retry_state.next_action.sleep:.1f}s 后重试"
+    )
 
 
 class LLMClient:
@@ -22,7 +31,10 @@ class LLMClient:
                 f"Environment variable {cfg.api_key_env} is not set. "
                 "Please export it before running."
             )
-        self.client = OpenAI(base_url=cfg.base_url, api_key=api_key, timeout=cfg.timeout_sec)
+        # max_retries=0: 关闭 SDK 隐形重试，tenacity 是唯一重试层（有日志可见），
+        # 否则两层叠加最坏 3×3=9 次请求 ≈ 18 分钟才报错
+        self.client = OpenAI(base_url=cfg.base_url, api_key=api_key,
+                             timeout=cfg.timeout_sec, max_retries=0)
 
     def _resolve_model(self, node: str | None) -> str:
         if node and node in self.cfg.overrides:
@@ -49,6 +61,7 @@ class LLMClient:
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=2, max=10),
         reraise=True,
+        before_sleep=_log_retry,
     )
     def chat_messages(
         self,
@@ -73,12 +86,15 @@ class LLMClient:
             kwargs["tools"] = tools
             kwargs["tool_choice"] = tool_choice
 
+        # INFO 级可见进度：并行子图跑 LLM 时屏幕不再是死寂
+        logger.info(f"LLM → node={node} model={model} msgs={len(messages)}")
+        t0 = time.perf_counter()
         resp = self.client.chat.completions.create(**kwargs)
         content = resp.choices[0].message.content or ""
-        logger.debug(
-            f"LLM call model={model} node={node} msgs={len(messages)} "
-            f"prompt_tokens={resp.usage.prompt_tokens if resp.usage else '?'} "
-            f"completion_tokens={resp.usage.completion_tokens if resp.usage else '?'}"
+        logger.info(
+            f"LLM ← node={node} {time.perf_counter() - t0:.1f}s "
+            f"in={resp.usage.prompt_tokens if resp.usage else '?'} "
+            f"out={resp.usage.completion_tokens if resp.usage else '?'}"
         )
         return content
 

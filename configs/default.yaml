@@ -16,9 +16,9 @@ llm:
   # 代码生成/修复节点可用更强模型（可选覆盖）
   overrides:
     generate_factor:
-      model: "qwen3.8-flash"
+      model: "deepseek-v4-flash-0731"
     code_fix:
-      model: "qwen3.8-flash"
+      model: "deepseek-v4-flash-0731"
 
 # ---------- 输入材料 ----------
 material:
