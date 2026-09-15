@@ -118,5 +118,6 @@ robustness:
 agent:
   max_agent_rounds: 30          # agent 节点最大轮数，超限强制收尾（防死循环）
   tool_output_truncate_chars: 8000   # 单条工具输出截断
-  messages_max_tokens_ratio: 0.6     # 消息栈 token 预算 = 模型窗口 × 比例
+  messages_max_tokens_ratio: 0.6     # 消息栈 token 预算 = context_window × 比例
+  context_window_tokens: 131072      # 模型上下文窗口（qwen 系列按部署配置校准）
   human_in_the_loop: false      # 高风险工具调用前人工确认（默认全自动）

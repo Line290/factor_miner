@@ -101,6 +101,8 @@ M4 模块：
 | MA4 | ReAct 主循环图 | agent/tools/finalize + 条件路由 + 轮数保护 | ✅ 2026-09-15 |
 | MA5 | 会话持久化 | threads 元数据 + `--list-sessions` / `--resume` | ✅ 2026-09-15 |
 | MA6 | CLI 批处理入口 | `--task`/`--material`/`--resume` + 流式终端 | ✅ 2026-09-15 |
+| MA7 | 安全保护 | 轮数上限/输出截断/token 预算监控 | ✅ 2026-09-15 |
+| MA8 | 上下文压缩 | compress 节点 + 摘要替换 | ✅ 2026-09-15 |
 | MA7 | 安全保护 | 轮数上限、输出截断、token 预算 | ⬜ |
 | MA8 | 上下文压缩 | 摘要生成与替换（基础版） | ⬜ |
 | MA9 | 流水线迁移与退役 | 旧节点逻辑迁移 + 对照回归 | ⬜ |
@@ -125,3 +127,9 @@ M4 模块：
 - `ingest.py` 抽取 `ingest_file()` 供 CLI 与节点共用；`finalize` 节点返回轮数/工具数统计供会话元数据回写。
 - 真实验证：新会话 qwen 自主 2 工具调用 + 结构化总结；`--list-sessions` 正确展示；`--resume` 恢复同一会话，历史 6 条消息完整加载续答。
 - 单测：`tests/test_session_store.py`（8 用例）+ `tests/test_main.py`（5 用例，含 resume/材料注入）。
+
+**MA7/MA8 实现记录（2026-09-15）**：
+- MA7：`max_agent_rounds=30` 与 `tool_output_truncate_chars=8000` 已在 MA4 落地；本轮补 `context_window_tokens=131072` 配置 + `messages_max_tokens_ratio=0.6` 预算监控（tools 节点后估算并告警）。
+- MA8：`src/agent_graph.py` 新增 `compress` 节点——tools 后条件路由（超预算 → compress → agent）；`_compress_messages` 把中间轮次交给 LLM 生成结构化摘要，替换为一条 `[历史会话摘要]` system 消息，保留首条 system + 最近 6 条原样；摘要长度自身截断防止二次超限。`agent_state.py` 的 messages 改用自定义 reducer（默认追加 / `{"__replace__": True}` 整体替换）。
+- 真实验证：`context_window_tokens=400` 极小窗口下跑真实 qwen 会话——模型并行 4 工具 → 估算 1818 > 240 → 触发压缩（9→8 条）→ 基于摘要续答出 2472 字符最终汇总。
+- 单测：`tests/test_agent_graph.py` 新增压缩触发/不触发 2 用例（共 6 用例）。

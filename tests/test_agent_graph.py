@@ -15,16 +15,26 @@ from src.config import AppConfig, load_config
 class FakeLLM:
     """按预设序列返回 assistant message 的假 LLM。"""
 
-    def __init__(self, responses: list[dict]):
+    def __init__(self, responses: list[dict], summaries: list[str] | None = None):
         self.responses = list(responses)
+        self.summaries = list(summaries or [])
         self.calls: list[list[dict]] = []
+        self.call_kinds: list[str] = []
 
     def chat_message(self, messages, *, node=None, **kwargs):
+        self.call_kinds.append("agent")
         self.calls.append(list(messages))
         if not self.responses:
             return {"role": "assistant", "content": "（默认结束）"}
         r = self.responses.pop(0)
         return dict(r)
+
+    def chat_messages(self, messages, *, node=None, **kwargs):
+        self.call_kinds.append(node or "chat_messages")
+        self.calls.append(list(messages))
+        if self.summaries:
+            return self.summaries.pop(0)
+        return "（默认摘要）"
 
 
 def _tool_call_msg(name: str, args: dict | None = None, call_id: str = "c1") -> dict:
@@ -135,3 +145,62 @@ def test_resume_from_checkpoint(tmp_path):
     state = graph2.get_state(thread)
     assert state.values["thread_id"] == "t4"
     assert state.values["agent_rounds"] == 2
+
+
+# ---------- MA7/MA8: token 预算监控与上下文压缩 ----------
+
+def test_compress_triggers_and_replaces(tmp_path):
+    cfg = load_config("configs/default.yaml")
+    cfg2 = cfg.model_copy(deep=True)
+    cfg2.persistence.run_root = tmp_path / "runs"
+    cfg2.agent.max_agent_rounds = 10
+    cfg2.agent.context_window_tokens = 200   # 极小窗口强制触发压缩
+    cfg2.agent.messages_max_tokens_ratio = 0.6
+
+    llm = FakeLLM(
+        responses=[
+            _tool_call_msg("query_business_rules", {}, call_id="c1"),
+            _tool_call_msg("query_business_rules", {}, call_id="c2"),
+            _tool_call_msg("query_business_rules", {}, call_id="c3"),
+            _tool_call_msg("query_business_rules", {}, call_id="c4"),
+            {"role": "assistant", "content": "最终结论"},
+        ],
+        summaries=["已压缩的历史摘要"],
+    )
+    graph = build_agent_graph(cfg2, llm)
+    out = graph.invoke(
+        {"thread_id": "t_comp", "task": "压缩测试"},
+        config={"configurable": {"thread_id": "t_comp"}},
+    )
+    assert out["final_answer"] == "最终结论"
+    assert "compress" in llm.call_kinds  # 压缩确实被触发
+
+    msgs = out["messages"]
+    # 首条仍是角色 system 提示
+    assert msgs[0]["role"] == "system"
+    # 存在 [历史会话摘要] 消息
+    summary_msgs = [m for m in msgs if "[历史会话摘要]" in (m.get("content") or "")]
+    assert len(summary_msgs) >= 1
+    # 最近消息（含工具结果）保留原样
+    assert any(m["role"] == "tool" for m in msgs[-6:])
+    # 压缩后消息数显著减少（替换而非追加）
+    assert len(msgs) < 10
+
+
+def test_no_compress_within_budget(tmp_path):
+    cfg = load_config("configs/default.yaml")
+    cfg2 = cfg.model_copy(deep=True)
+    cfg2.persistence.run_root = tmp_path / "runs"
+    cfg2.agent.context_window_tokens = 131072  # 默认大窗口，短会话不触发
+
+    llm = FakeLLM([
+        _tool_call_msg("query_data_schema", {}, call_id="c1"),
+        {"role": "assistant", "content": "完成"},
+    ])
+    graph = build_agent_graph(cfg2, llm)
+    out = graph.invoke(
+        {"thread_id": "t_nc", "task": "不压缩"},
+        config={"configurable": {"thread_id": "t_nc"}},
+    )
+    assert "compress" not in llm.call_kinds
+    assert out["final_answer"] == "完成"

@@ -8,11 +8,23 @@ from typing import Annotated, Any, TypedDict
 from .models import CandidateRecord
 
 
+def _messages_reducer(left: list[dict] | None, right) -> list[dict]:
+    """messages 归约：默认追加（节点增量返回）；compress 节点用
+    ``{"__replace__": True, "messages": [...]}`` 整体替换（长上下文压缩）。
+    """
+    if right is None:
+        return left or []
+    if isinstance(right, dict) and right.get("__replace__"):
+        return list(right["messages"])
+    return (left or []) + list(right)
+
+
 class AgentSessionState(TypedDict, total=False):
     """State for the agentic session graph (ReAct loop).
 
     ``messages`` 是 OpenAI Chat Completions 原生 dict 列表
-    （role: user / assistant / tool），用 ``operator.add`` 归约以支持节点增量返回。
+    （role: user / assistant / tool），用 ``_messages_reducer`` 归约：
+    默认追加，压缩时整体替换。
     """
 
     # 会话元数据
@@ -25,7 +37,7 @@ class AgentSessionState(TypedDict, total=False):
     material_text: str | None      # 解析后的全文
 
     # ReAct 消息栈
-    messages: Annotated[list[dict], add]
+    messages: Annotated[list[dict], _messages_reducer]
 
     # 终止保护与计数
     agent_rounds: int              # agent 节点已执行轮数（上限见配置）

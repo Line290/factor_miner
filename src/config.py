@@ -138,7 +138,8 @@ class AgentConfig(BaseModel):
     """Agentic 会话模式（Claude Code 式 ReAct 循环）配置。"""
     max_agent_rounds: int = 30          # agent 节点最大执行轮数（防 LLM 死循环）
     tool_output_truncate_chars: int = 8000   # 单条工具输出截断上限
-    messages_max_tokens_ratio: float = 0.6   # 消息栈 token 预算 = 模型窗口 × 该比例（触发压缩）
+    messages_max_tokens_ratio: float = 0.6   # 消息栈 token 预算 = context_window × 该比例（触发压缩）
+    context_window_tokens: int = 131072      # 模型上下文窗口（token），用于预算计算
     human_in_the_loop: bool = False     # 高风险工具调用前人工确认（默认全自动）
 
 
